@@ -14,7 +14,7 @@ def create_vocabulary(vocab_path, data_path, max_size):
     lines = f.readlines()
     for line in lines:
         line = tf.compat.as_bytes(line)
-        tokens = line.strip().split(' ')
+        tokens = line.strip().lower().split(' ')
         for token in tokens:
             if token in vocab:
                 vocab[token] += 1
@@ -39,14 +39,27 @@ def get_vocabulary(vocab_path):
     f.close()
     return vocab, rev_vocab
 
-def sentence_to_ids(sentence, vocabulary, unk_id):
+def sentence_to_ids(sentence, vocabulary):
     """
     Returns a tokenized version of a sentence that the network can process
     """
     words = sentence.strip().split(' ')
-    return [vocabulary.get(w, unk_id) for w in words]
+    return [vocabulary.get(w, dc.UNK_ID) for w in words]
 
-def data_to_ids(data_path, target_path, vocab_path, unk_id):
+def pad_data(token_sentence, padlength, is_source):
+    """
+    Pads data to value
+    """
+    if is_source:
+        pad_str = (str(dc.EMPT_ID) + ' ')*(padlength - len(token_sentence))
+        token_sentence = token_sentence[::-1]
+        return pad_str + ' '.join([str(tok) for tok in token_sentence])
+    else:
+        pad_str = (' ' + str(dc.EMPT_ID))*(padlength - len(token_sentence))
+        token_sentence = [dc.GO_ID] + token_sentence + [dc.EOS_ID]
+        return ' '.join([str(tok) for tok in token_sentence]) + pad_str
+
+def data_to_ids(data_path, target_path, vocab_path, padlen, is_source=False):
     """
     Stores a tokenized version of input data
     """
@@ -57,8 +70,9 @@ def data_to_ids(data_path, target_path, vocab_path, unk_id):
 
     for line in lines:
         line = tf.compat.as_bytes(line.strip())
-        token_sentence = sentence_to_ids(line, vocab, unk_id)
-        f_target.write(' '.join([str(tok) for tok in token_sentence]) + '\n')
+        token_sentence = sentence_to_ids(line, vocab)
+        padded_sentence = pad_data(token_sentence, padlen, is_source)
+        f_target.write(padded_sentence + '\n')
     f_data.close()
     f_target.close()
 
@@ -69,12 +83,12 @@ def process_data():
     create_vocabulary(dc.NORMAL_VOCAB_PATH, dc.NORMAL_SENTENCE_PATH,
                       dc.MAX_VOCAB_SIZE)
     create_vocabulary(dc.SIMPLE_VOCAB_PATH, dc.SIMPLE_SENTENCE_PATH,
-                      dc.MAX_VOCAB_SIZE)
+                      dc.MAX_VOCAB_SIZE - dc.EOS_GO_TOKEN_SIZE)
 
     data_to_ids(dc.NORMAL_SENTENCE_PATH, dc.NORMAL_IDS_PATH,
-                dc.NORMAL_VOCAB_PATH, dc.UNK_ID)
+                dc.NORMAL_VOCAB_PATH, dc.MAX_LEN_IN, True)
     data_to_ids(dc.SIMPLE_SENTENCE_PATH, dc.SIMPLE_IDS_PATH,
-                dc.SIMPLE_VOCAB_PATH, dc.UNK_ID)
+                dc.SIMPLE_VOCAB_PATH, dc.MAX_LEN_OUT)
 
 if __name__ == '__main__':
     process_data()
