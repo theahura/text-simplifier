@@ -5,7 +5,10 @@ Description: Model for seq2seq text simplifier
 """
 
 import numpy as np
+import random
 import tensorflow as tf
+
+import data_constants as dc
 import data_utils
 
 class SimplifierModel():
@@ -15,7 +18,7 @@ class SimplifierModel():
                  simple_vocab_size,
                  units_per_layer,
                  num_layers,
-                 max_gradient_norm,
+                 max_grad_norm,
                  batch_size,
                  learning_rate,
                  learning_rate_decay_factor,
@@ -36,37 +39,53 @@ class SimplifierModel():
         output_projection = None
         softmax_loss_function = None
 
-        # Add sampleloss here
+        if (num_samples > 0 and num_samples < self.simple_vocab_size and 
+                dc.USE_SAMPLED_SOFTMAX):
+            print "Using sampled softmax."
+            w_t = tf.get_variable('proj_w', [self.simple_vocab_size,
+                units_per_layer], dtype=dtype)
+            w = tf.transpose(w_t) 
+            b = tf.get_variable('proj_b', [self.simple_vocab_size], dtype=dtype)
+            output_projection = (w, b)
+
+            if dc.DEBUG:
+                print "OUTPUT PROJECTION SET"
+
+            def sampled_loss(labels, inputs):
+                labels = tf.reshape(labels, [-1, 1])
+                local_w_t = tf.cast(w_t, tf.float32)
+                local_b = tf.cast(b, tf.float32)
+                local_inputs = tf.cast(inputs, tf.float32)
+                return tf.cast(
+                        tf.nn.sampled_softmax_loss(
+                            weights=local_w_t,
+                            biases=local_b,
+                            labels=labels,
+                            inputs=local_inputs,
+                            num_sampled=num_samples,
+                            num_classes=self.simple_vocab_size),
+                        dtype)
+            softmax_loss_function = sampled_loss
+        else:
+            print "Not using sampled softmax"
+              
         # Add conv net layers here
 
         def single_cell():
-            return tf.contrib.rnn.BasicLSTMCell(size)
+            return tf.contrib.rnn.LSTMCell(units_per_layer)
 
+        cell = single_cell()
         if num_layers > 1:
             cell = tf.contrib.rnn.MultiRNNCell([single_cell() for _ in
                 range(num_layers)])
-        else:
-            cell = single_cell()
-
-        def seq2seq_f(encoder_inputs, decoder_inputs, feed_previous):
-            return tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(
-                    encoder_inputs,
-                    decoder_inputs,
-                    cell,
-                    num_encoder_symbols=normal_vocab_size,
-                    num_decoder_symbols=simple_vocab_size,
-                    embedding_size=size,
-                    feed_previous=feed_previous,
-                    dtype=dtype)
-       
 
         self.encoder_inputs = []
         self.decoder_inputs = [] 
         self.target_weights = []
         for i in xrange(dc.MAX_LEN_IN):
-            self.enocder_inputs.append(tf.placeholder(tf.int32, shape=[None],
+            self.encoder_inputs.append(tf.placeholder(tf.int32, shape=[None],
                 name="encoder%d" % i))
-        for i in xrange(dc.MAX_LEN_OUT + 1): # Not sure if +1 is needed.
+        for i in xrange(dc.MAX_LEN_OUT + 1): 
             self.decoder_inputs.append(tf.placeholder(tf.int32, shape=[None],
                 name="decoder%d" % i))
             self.target_weights.append(tf.placeholder(dtype, shape=[None],
@@ -74,32 +93,63 @@ class SimplifierModel():
 
         targets = [self.decoder_inputs[i + 1]
                    for i in xrange(len(self.decoder_inputs) - 1)]
-        if feed_previous: 
-            self.out, self.loss = tf.contrib.legacy_seq2seq.model_with_buckets(
-                    self.encoder_inputs, self.decoder_inputs, targets,
-                    self.target_weights, [(dc.MAX_LEN_IN, dc.MAX_LEN_OUT)], 
-                    lambda x, y: seq2seq_f(x, y, True), 
-                    softmax_loss_function=softmax_loss_function)
-            # Add output projection stuff
-        else:
-            self.out, self.loss = tf.contrib.legacy_seq2seq.model_with_buckets(
-                    self.encoder_inputs, self.decoder_inputs, targets,
-                    self.target_weights, [(dc.MAX_LEN_IN, dc.MAX_LEN_OUT)], 
-                    lambda x, y: seq2seq_f(x, y, False), 
-                    softmax_loss_function=softmax_loss_function)
+
+        if dc.DEBUG:
+            print "Normal size %d Simple size %d" % (normal_vocab_size,
+                    simple_vocab_size)
+        self.out, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(
+                    self.encoder_inputs[:dc.MAX_LEN_IN],
+                    self.decoder_inputs[:dc.MAX_LEN_OUT],
+                    cell,
+                    num_encoder_symbols=normal_vocab_size,
+                    num_decoder_symbols=simple_vocab_size,
+                    embedding_size=units_per_layer,
+                    output_projection=output_projection,
+                    feed_previous=feed_previous,
+                    dtype=dtype)
+
+        if dc.DEBUG:
+            self.state = state
+            print "Output len %d" % len(self.out)
+            print "Tensor len"
+            print self.out[0].get_shape()
+
+        self.loss = tf.contrib.legacy_seq2seq.sequence_loss(self.out,
+                targets[:dc.MAX_LEN_OUT],
+                self.target_weights[:dc.MAX_LEN_OUT],
+                softmax_loss_function=softmax_loss_function)
+
+        if output_projection is not None:
+            if dc.DEBUG:
+                print "Output Projection shape"
+                print output_projection[0].get_shape()
+            self.out_proj = [tf.matmul(output, output_projection[0]) +
+                output_projection[1] for output in self.out]
 
         params = tf.trainable_variables()
+
+        if dc.DEBUG:
+            print [param.name for param in params]
+            print len(params)
+
         if not feed_previous:
-            opt = tf.train.AdamOptimizer(self.learning_rate)
+            if max_grad_norm:
+                opt = tf.train.AdamOptimizer(self.learning_rate)
 
-            gradients = tf.gradients(self.loss[0], params)
-            clipped_gradients, norm = tf.clip_by_global_norm(gradients,
-                                                             max_gradient_norm)
+                gradients = tf.gradients(self.loss, params)
+                clipped_gradients, norm = tf.clip_by_global_norm(gradients,
+                                                                 max_grad_norm)
 
-            self.grad_norm = norm
-            self.update = opt.apply_gradients(zip(clipped_gradients, params),
-                    global_step=self.global_step)
+                self.grad_norm = norm
+                self.update = opt.apply_gradients(zip(clipped_gradients, params),
+                        global_step=self.global_step)
+            else:
+                self.update = tf.train.AdamOptimizer(
+                        self.learning_rate).minimize(self.loss,
+                                self.global_step)
 
+        if dc.DEBUG:
+            print "Var count: %d" % len(tf.global_variables())
         self.saver = tf.train.Saver(tf.global_variables())
 
     def step(self, session, encoder_inputs, decoder_inputs, target_weights,
@@ -125,30 +175,41 @@ class SimplifierModel():
         last_target = self.decoder_inputs[decoder_size].name
         input_feed[last_target] = np.zeros([self.batch_size], dtype=np.int32)
 
+        if dc.DEBUG:
+            print "INPUT FEED:"
+            print input_feed
+
         if not feed_previous:
             output_feed = [self.update,
                            self.grad_norm,
                            self.loss]    
+            if dc.DEBUG:
+                output_feed.append(self.state)
         else:
             output_feed = [self.loss]
             for i in xrange(decoder_size):
-                output_feed.append(self.out[i])
+                output_feed.append(self.out_proj[i])
 
         outputs = session.run(output_feed, input_feed) 
+
+        if dc.DEBUG and not feed_previous:
+            print "STATES"
+            print len(outputs[3])
+            print outputs[3]
 
         if feed_previous:
             return None, outputs[0], outputs[1:]
         else:
-            return outputs[1], outputs[2], None
+            return outputs[2], outputs[1], None
 
     def get_batch(self, data):
         """Gets the next batch from the data set"""
-        encoder_size, decoder_size = dc.MAX_LEN_IN, MAX_LEN_OUT
+        encoder_size, decoder_size = dc.MAX_LEN_IN, dc.MAX_LEN_OUT
         encoder_inputs, decoder_inputs = [], []
 
         for _ in xrange(self.batch_size):
             encoder_input, decoder_input = random.choice(data)
-            encoder_inputs.appened(encoder_input)
+            encoder_inputs.append(encoder_input)
             decoder_inputs.append(decoder_input)
 
         batch_encoder_in, batch_decoder_in, batch_weights = [], [], []
@@ -169,8 +230,17 @@ class SimplifierModel():
             for batch_id in xrange(self.batch_size):
                 if sentence_location < decoder_size - 1:
                     target = decoder_inputs[batch_id][sentence_location + 1]
-                if sentence_location == decoder_size - 1 or target == dc.PAD_ID:
+                if (sentence_location == decoder_size - 1 or target ==
+                        dc.EMPT_ID):
                     batch_weight[batch_id] = 0.0
             batch_weights.append(batch_weight)
+
+        if dc.DEBUG:
+            print "ENCODER IN"
+            print batch_encoder_in
+            print "DECODER IN"
+            print batch_decoder_in
+            print "WEIGHTS"
+            print batch_weights
 
         return batch_encoder_in, batch_decoder_in, batch_weights

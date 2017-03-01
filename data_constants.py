@@ -33,12 +33,20 @@ MAX_VOCAB_SIZE = 80000
 # Network constants.
 UNITS_PER_LAYER = 256
 LAYERS = 2
-MAX_GRAD_NORM = 5.0
+MAX_GRAD_NORM = 5.0 # Use clipping
 BATCH_SIZE =  64
+NUM_SAMPLES = 512
 LEARNING_RATE = 0.5
 LEARNING_RATE_DECAY_FACTOR = 0.99
+DECAY_POINT = 3 # If no improvement after this number of steps, decay at ckpt
 TRAIN_VALID_SPLIT = 4 # Every fourth is put in validation
+NUM_STEPS = 10
+IGNORE_STEPS = True
+SELF_TEST = False
+TRAIN = True
+USE_SAMPLED_SOFTMAX = True # If not true this crashes comp
 
 # Debug constants.
-STEPS_PER_CHECKPOINT = 200
-CREATE_DATA = True
+DEBUG = True
+STEPS_PER_CHECKPOINT = 50
+CREATE_DATA = False
