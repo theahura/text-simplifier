@@ -200,7 +200,7 @@ class SimplifierModel():
         if feed_previous:
             return None, outputs[0], outputs[1:]
         else:
-            return outputs[2], outputs[1], None
+            return outputs[1], outputs[2], None
 
     def get_batch(self, data):
         """Gets the next batch from the data set"""

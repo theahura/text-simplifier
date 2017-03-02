@@ -141,14 +141,13 @@ def test():
 
             print token_sentence
 
-            padded_sentence = data_utils.pad_data(token_sentence, dc.MAX_LEN_IN,
-                    True)
+            padded_sentence = data_utils.pad_data(token_sentence, True)
 
             print padded_sentence
 
             decoder = [dc.GO_ID] + [dc.EMPT_ID]*(dc.MAX_LEN_OUT - 1)
 
-            input_token_sentence = [(padded_sentence.lower().split(), decoder)]
+            input_token_sentence = [(padded_sentence, decoder)]
             encoder_in, decoder_in, target_weights = model.get_batch(
                     input_token_sentence)
 

@@ -42,11 +42,11 @@ DECAY_POINT = 3 # If no improvement after this number of steps, decay at ckpt
 TRAIN_VALID_SPLIT = 4 # Every fourth is put in validation
 NUM_STEPS = 10
 IGNORE_STEPS = True
-SELF_TEST = False
-TRAIN = True
+SELF_TEST = True
+TRAIN = False
 USE_SAMPLED_SOFTMAX = True # If not true this crashes comp
 
 # Debug constants.
-DEBUG = True
+DEBUG = False
 STEPS_PER_CHECKPOINT = 50
-CREATE_DATA = False
+CREATE_DATA = True
