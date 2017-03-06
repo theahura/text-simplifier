@@ -1,6 +1,7 @@
 """ Where training and simplification actually happen """
 
 import numpy as np
+import math
 import os
 import sys
 import tensorflow as tf
@@ -44,7 +45,7 @@ def create_model(session, feed_previous):
     with open(dc.NORMAL_VOCAB_PATH, 'r+') as f:
         normal_vocab_size = len(f.readlines())
     with open(dc.SIMPLE_VOCAB_PATH, 'r+') as f:
-        simple_vocab_size = len(f.readlines())
+        simple_vocab_size = len(f.readlines()) + 2
 
     model = sm.SimplifierModel(
                 normal_vocab_size,
@@ -69,8 +70,13 @@ def create_model(session, feed_previous):
         session.run(tf.global_variables_initializer())
     return model
 
-def train(create_data):
+def train(create_data, log_file):
     """Trains a english to simple english translation model"""
+
+    log = open(log_file, 'w+')
+    fields = ['step', 'step-time', 'batch-loss', 'batch-perplexity',
+            'learnrate', 'val-loss']
+    log.write(','.join(fields) + '\n')
 
     if create_data:
         data_utils.process_data()
@@ -104,10 +110,10 @@ def train(create_data):
             if current_step % dc.STEPS_PER_CHECKPOINT == 0:
                 learnrate = model.learning_rate.eval()
                 perplex = math.exp(float(loss)) if loss < 300 else float("inf")
-                print "global step %d loss %f plex: %f learnrate %f step-time: %f" % (
-                        model.global_step.eval(), loss, perplex, learnrate,
-                        step_time)
-                
+                step = model.global_step.eval()
+                print "step %d loss %f plex: %f learnrate %f step-time: %f" % (
+                        step, loss, perplex, learnrate, step_time)
+
                 if len(prev_losses) > 2 and loss > max(
                         prev_losses[-1 * dc.DECAY_POINT:]):
                     sess.run(model.learning_rate_decay_op)
@@ -115,13 +121,27 @@ def train(create_data):
                 checkpoint_path = os.path.join(dc.CKPT_PATH, 'simplify.ckpt')
                 model.saver.save(sess, checkpoint_path,
                         global_step=model.global_step)
-                step_time, loss = 0.0, 0.0
 
                 encoder_in, decoder_in, target_weights = model.get_batch(valid)
                 _, val_loss, outputs = model.step(sess, encoder_in, decoder_in,
                                                   target_weights, True)
 
+                if dc.DEBUG:
+                    print "ENCODER LEN"
+                    print len(encoder_in[0])
+                    print "OUTPUT LENs"
+                    print len(outputs)
+                    print len(outputs[0])
+                    print len(outputs[0][0])
+                outputs = [int(np.argmax(logit, axis=1)[0])
+                        for logit in outputs]
+                print outputs
                 print "validation loss: %d" % val_loss
+
+                fields = [step, step_time, loss, perplex, learnrate, val_loss]
+                log.write(','.join(map(str, fields)) + '\n')
+
+                step_time, loss = 0.0, 0.0
             sys.stdout.flush()
 
 def test():
@@ -178,7 +198,7 @@ def test():
             sys.stdout.flush()
             sentence = sys.stdin.readline()
 
-def self_test():
+def pipe_test():
   """Test the model."""
   with tf.Session() as sess:
     print("Pipeline test for neural translation model")
@@ -189,7 +209,7 @@ def self_test():
     sess.run(tf.global_variables_initializer())
 
     data_set = ([([1, 7], [2, 2]), ([8, 3], [4, 4]), ([9, 5], [6, 6])])
-    for _ in xrange(100):  # Train the fake model for 50 steps.
+    for _ in xrange(500):  # Train the fake model for 50 steps.
       encoder_inputs, decoder_inputs, target_weights = model.get_batch(
           data_set)
       _, step_loss, _ = model.step(sess, encoder_inputs, decoder_inputs,
@@ -203,8 +223,9 @@ def self_test():
     print output_logits
     print len(output_logits)
     print len(output_logits[0])
+    print len(output_logits[0][0])
     print np.argmax(output_logits[0], axis=1)
-    outputs = [int(np.argmax(logit, axis=1)[0]) for logit in output_logits]
+    outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
     print len(outputs)
     print outputs
 
@@ -218,10 +239,10 @@ def self_test():
 
 
 if __name__ == "__main__":
-    if dc.SELF_TEST:
-        self_test()
+    if dc.PIPE_TEST:
+        pipe_test()
     else:
         if dc.TRAIN:
-            train(dc.CREATE_DATA)
+            train(dc.CREATE_DATA, dc.LOG_FILE_NAME)
 
         test()

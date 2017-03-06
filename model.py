@@ -69,9 +69,10 @@ class SimplifierModel():
         else:
             print "Not using sampled softmax"
               
-        # Add conv net layers here
-
         def single_cell():
+            cell = tf.contrib.rnn.LSTMCell(units_per_layer)
+            cell = tf.contrib.rnn.DropoutWrapper(cell, dc.INPUT_KEEP_PROB,
+                    dc.OUTPUT_KEEP_PROB)
             return tf.contrib.rnn.LSTMCell(units_per_layer)
 
         cell = single_cell()
@@ -113,12 +114,19 @@ class SimplifierModel():
             print "Output len %d" % len(self.out)
             print "Tensor len"
             print self.out[0].get_shape()
+            print "Target len %d" % len(targets)
+            print "Target weights len %d" % len(self.target_weights)
 
         self.loss = tf.contrib.legacy_seq2seq.sequence_loss(self.out,
                 targets[:dc.MAX_LEN_OUT],
                 self.target_weights[:dc.MAX_LEN_OUT],
                 softmax_loss_function=softmax_loss_function)
 
+        if dc.DEBUG:
+            print "Loss len"
+            print self.loss.get_shape()
+
+        self.out_proj = None
         if output_projection is not None:
             if dc.DEBUG:
                 print "Output Projection shape"
@@ -134,7 +142,8 @@ class SimplifierModel():
 
         if not feed_previous:
             if max_grad_norm:
-                opt = tf.train.AdamOptimizer(self.learning_rate)
+                print "Using clipping"
+                opt = tf.train.GradientDescentOptimizer(self.learning_rate)
 
                 gradients = tf.gradients(self.loss, params)
                 clipped_gradients, norm = tf.clip_by_global_norm(gradients,
@@ -144,7 +153,8 @@ class SimplifierModel():
                 self.update = opt.apply_gradients(zip(clipped_gradients, params),
                         global_step=self.global_step)
             else:
-                self.update = tf.train.AdamOptimizer(
+                print "Not using clipping"
+                self.update = tf.train.GradientDescentOptimizer(
                         self.learning_rate).minimize(self.loss,
                                 self.global_step)
 
@@ -181,26 +191,29 @@ class SimplifierModel():
 
         if not feed_previous:
             output_feed = [self.update,
-                           self.grad_norm,
+                           # self.grad_norm,
                            self.loss]    
             if dc.DEBUG:
                 output_feed.append(self.state)
         else:
             output_feed = [self.loss]
             for i in xrange(decoder_size):
-                output_feed.append(self.out_proj[i])
+                if self.out_proj:
+                    output_feed.append(self.out_proj[i])
+                else:
+                    output_feed.append(self.out[i])
 
         outputs = session.run(output_feed, input_feed) 
 
         if dc.DEBUG and not feed_previous:
             print "STATES"
-            print len(outputs[3])
-            print outputs[3]
+            print len(outputs[2])
+            print outputs[2]
 
         if feed_previous:
             return None, outputs[0], outputs[1:]
         else:
-            return outputs[1], outputs[2], None
+            return None, outputs[1], None
 
     def get_batch(self, data):
         """Gets the next batch from the data set"""

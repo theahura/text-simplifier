@@ -14,7 +14,7 @@ SIMPLE_VOCAB_PATH = 'data/simple_vocab.data'
 CKPT_PATH = 'data/ckpt/'
 
 # Data constants: IDs.
-EMPT_TOKEN = '@@@ '
+EMPT_TOKEN = 'EMPT'
 EOS = 'EOS'
 UNK_TOKEN = 'UNK_ID'
 GO_TOKEN = 'GO'
@@ -36,17 +36,20 @@ LAYERS = 2
 MAX_GRAD_NORM = 5.0 # Use clipping
 BATCH_SIZE =  64
 NUM_SAMPLES = 512
-LEARNING_RATE = 0.5
+LEARNING_RATE = 1
 LEARNING_RATE_DECAY_FACTOR = 0.99
 DECAY_POINT = 3 # If no improvement after this number of steps, decay at ckpt
 TRAIN_VALID_SPLIT = 4 # Every fourth is put in validation
 NUM_STEPS = 10
 IGNORE_STEPS = True
-SELF_TEST = True
-TRAIN = False
+PIPE_TEST = False
+TRAIN = True
 USE_SAMPLED_SOFTMAX = True # If not true this crashes comp
+INPUT_KEEP_PROB = 0.9
+OUTPUT_KEEP_PROB = 0.9
 
 # Debug constants.
 DEBUG = False
-STEPS_PER_CHECKPOINT = 50
+STEPS_PER_CHECKPOINT = 3
 CREATE_DATA = True
+LOG_FILE_NAME = 'test'

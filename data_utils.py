@@ -41,16 +41,21 @@ def get_vocabulary(vocab_path):
 
 def sentence_to_ids(sentence, vocabulary):
     """
-    Returns a tokenized version of a sentence that the network can process
+    Returns a tokenized version of a sentence that the network can process.
     """
     words = sentence.strip().split(' ')
     return [vocabulary.get(w, dc.UNK_ID) for w in words]
 
 def pad_data(token_sentence, is_normal):
-    padding = [dc.EMPT_ID] * (dc.MAX_LEN_IN - len(token_sentence))
+    """
+    Pads data to max length, with input data being front padded and reversed and
+    output data being back padded and given go and eos tokens.
+    """
     if is_normal:
+        padding = [dc.EMPT_ID] * (dc.MAX_LEN_IN - len(token_sentence))
         return padding + token_sentence[::-1]
     else:
+        padding = [dc.EMPT_ID] * (dc.MAX_LEN_OUT - len(token_sentence))
         return [dc.GO_ID] + token_sentence + [dc.EOS_ID] + padding[:-1]
 
 
@@ -78,7 +83,7 @@ def process_data():
     create_vocabulary(dc.NORMAL_VOCAB_PATH, dc.NORMAL_SENTENCE_PATH,
                       dc.MAX_VOCAB_SIZE)
     create_vocabulary(dc.SIMPLE_VOCAB_PATH, dc.SIMPLE_SENTENCE_PATH,
-                      dc.MAX_VOCAB_SIZE)
+                      dc.MAX_VOCAB_SIZE - 2)
 
     data_to_ids(dc.NORMAL_SENTENCE_PATH, dc.NORMAL_IDS_PATH,
                 dc.NORMAL_VOCAB_PATH, True)
