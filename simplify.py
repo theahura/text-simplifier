@@ -1,5 +1,6 @@
 """ Where training and simplification actually happen """
 
+import nltk
 import numpy as np
 import math
 import os
@@ -11,7 +12,7 @@ import data_constants as dc
 import data_utils
 import model as sm
 
-def read_data(normal_path, simple_path):
+def read_data(normal_path, simple_path, is_test=False):
     """Reads data from files and returns as list of tuples"""
     normal_f = open(normal_path, 'r+')
     simple_f = open(simple_path, 'r+')
@@ -25,7 +26,7 @@ def read_data(normal_path, simple_path):
         normal_ids = [int(x) for x in normal_line.split()]
         simple_ids = [int(x) for x in simple_line.split()]
         
-        if count % dc.TRAIN_VALID_SPLIT == 0:
+        if count % dc.TRAIN_VALID_SPLIT == 0 and not is_test:
             valid_set.append([normal_ids, simple_ids])
         else:
             train_set.append([normal_ids, simple_ids])
@@ -51,7 +52,6 @@ def create_model(session, feed_previous):
                 normal_vocab_size,
                 simple_vocab_size, 
                 dc.UNITS_PER_LAYER,
-                dc.LAYERS,
                 dc.MAX_GRAD_NORM,
                 dc.BATCH_SIZE,
                 dc.LEARNING_RATE,
@@ -73,15 +73,18 @@ def create_model(session, feed_previous):
 def train(create_data, log_file):
     """Trains a english to simple english translation model"""
 
-    log = open(log_file, 'w+')
-    fields = ['step', 'step-time', 'batch-loss', 'batch-perplexity',
-            'learnrate', 'val-loss']
-    log.write(','.join(fields) + '\n')
+    if os.path.isfile('./' + log_file):
+        raise ValueError('log file already exists')
 
     if create_data:
         data_utils.process_data()
 
-    with tf.Session() as sess:
+    with tf.Session() as sess, open(log_file, 'w+') as log:
+        print 'Opening log file'
+        fields = ['step', 'step-time', 'batch-loss', 'batch-perplexity',
+                'learnrate', 'val-loss']
+        log.write(','.join(fields) + '\n')
+
         print 'creating model'
         model = create_model(sess, False)
 
@@ -136,7 +139,7 @@ def train(create_data, log_file):
                 outputs = [int(np.argmax(logit, axis=1)[0])
                         for logit in outputs]
                 print outputs
-                print "validation loss: %d" % val_loss
+                print "validation loss: %f" % val_loss
 
                 fields = [step, step_time, loss, perplex, learnrate, val_loss]
                 log.write(','.join(map(str, fields)) + '\n')
@@ -144,7 +147,57 @@ def train(create_data, log_file):
                 step_time, loss = 0.0, 0.0
             sys.stdout.flush()
 
-def test():
+def test(log_file):
+    """Get BLEU metrics for test data."""
+    if os.path.isfile('./' + log_file + '_test'):
+        raise ValueError('log file already exists')
+
+    with tf.Session() as sess, open(log_file + '_test', 'w+') as log:
+        log.write('batch,bleu\n')
+        model = create_model(sess, True)
+
+        print 'reading data'
+        test, _ = read_data(dc.NORMAL_IDS_TEST_PATH, dc.SIMPLE_IDS_TEST_PATH,
+                            True)
+
+        avg_bleu = 0
+        for batch in xrange(dc.TEST_BATCHES):
+            encoder_in, decoder_in, target_weights = model.get_batch(test)
+            _, _, output_logits = model.step(sess, encoder_in, decoder_in,
+                                             target_weights, True)
+
+            if dc.DEBUG:
+                print output_logits[0].shape
+
+            outputs = [np.argmax(logit, axis=1) for logit in output_logits]
+
+            if dc.DEBUG:
+                print len(outputs)
+                print outputs
+
+            def get_bleu(h, r):
+                return nltk.translate.bleu_score.sentence_bleu([r], h)
+
+            avg_bleu_per_batch = 0
+
+            if dc.DEBUG:
+                print 'hypothesis'
+                print [pos[0] for pos in outputs]
+                print [pos[0] for pos in encoder_in]
+
+            for i in xrange(dc.BATCH_SIZE):
+                h = [pos[i] for pos in outputs]
+                r = [pos[i] for pos in encoder_in]
+                avg_bleu_per_batch += get_bleu(h, r)/dc.BATCH_SIZE
+            
+            print "Batch %d bleu %f" % (batch, avg_bleu_per_batch)
+            log.write("%d,%f\n" % (batch, avg_bleu_per_batch)) 
+            avg_bleu += avg_bleu_per_batch
+
+        avg_bleu = avg_bleu/dc.TEST_BATCHES
+        print "Avg bleu: %f" % avg_bleu
+
+def input_test():
     with tf.Session() as sess:
         model = create_model(sess, True)
         model.batch_size = 1
@@ -179,7 +232,10 @@ def test():
 
             print "Loss: %f" % loss
 
+            print output_logits
+            print len(output_logits)
             print len(output_logits[0])
+            print len(output_logits[0][0])
             print output_logits[0]
             print np.max(output_logits[0], axis=1)
 
@@ -241,8 +297,9 @@ def pipe_test():
 if __name__ == "__main__":
     if dc.PIPE_TEST:
         pipe_test()
-    else:
-        if dc.TRAIN:
+    elif dc.TRAIN:
             train(dc.CREATE_DATA, dc.LOG_FILE_NAME)
-
-        test()
+    elif dc.TEST:
+        test(dc.LOG_FILE_NAME)
+    else:
+        input_test()

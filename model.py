@@ -17,7 +17,6 @@ class SimplifierModel():
                  normal_vocab_size,
                  simple_vocab_size,
                  units_per_layer,
-                 num_layers,
                  max_grad_norm,
                  batch_size,
                  learning_rate,
@@ -69,16 +68,16 @@ class SimplifierModel():
         else:
             print "Not using sampled softmax"
               
-        def single_cell():
-            cell = tf.contrib.rnn.LSTMCell(units_per_layer)
+        def single_cell(units):
+            cell = tf.contrib.rnn.LSTMCell(units)
             cell = tf.contrib.rnn.DropoutWrapper(cell, dc.INPUT_KEEP_PROB,
                     dc.OUTPUT_KEEP_PROB)
-            return tf.contrib.rnn.LSTMCell(units_per_layer)
+            return cell 
 
-        cell = single_cell()
-        if num_layers > 1:
-            cell = tf.contrib.rnn.MultiRNNCell([single_cell() for _ in
-                range(num_layers)])
+        cell = single_cell(dc.LAYER_SETUP[0])
+        if len(dc.LAYER_SETUP) > 1:
+            cell = tf.contrib.rnn.MultiRNNCell([single_cell(units) for units in
+                dc.LAYER_SETUP])
 
         self.encoder_inputs = []
         self.decoder_inputs = [] 
@@ -117,10 +116,14 @@ class SimplifierModel():
             print "Target len %d" % len(targets)
             print "Target weights len %d" % len(self.target_weights)
 
+        l2 = dc.REG_CONST * sum(tf.nn.l2_loss(x) for x in
+                tf.trainable_variables() if ('lstm_cell' in x.name and not
+                    'biases' in x.name))
+
         self.loss = tf.contrib.legacy_seq2seq.sequence_loss(self.out,
                 targets[:dc.MAX_LEN_OUT],
                 self.target_weights[:dc.MAX_LEN_OUT],
-                softmax_loss_function=softmax_loss_function)
+                softmax_loss_function=softmax_loss_function) + l2
 
         if dc.DEBUG:
             print "Loss len"
@@ -137,6 +140,7 @@ class SimplifierModel():
         params = tf.trainable_variables()
 
         if dc.DEBUG:
+            print 'PARAMETERS'
             print [param.name for param in params]
             print len(params)
 

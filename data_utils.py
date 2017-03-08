@@ -49,12 +49,15 @@ def sentence_to_ids(sentence, vocabulary):
 def pad_data(token_sentence, is_normal):
     """
     Pads data to max length, with input data being front padded and reversed and
-    output data being back padded and given go and eos tokens.
+    output data being back padded and given go and eos tokens. Lines greater
+    than max len are cut down.
     """
     if is_normal:
+        token_sentence = token_sentence[:dc.MAX_LEN_IN]
         padding = [dc.EMPT_ID] * (dc.MAX_LEN_IN - len(token_sentence))
         return padding + token_sentence[::-1]
     else:
+        token_sentence = token_sentence[:dc.MAX_LEN_OUT - 2]
         padding = [dc.EMPT_ID] * (dc.MAX_LEN_OUT - len(token_sentence))
         return [dc.GO_ID] + token_sentence + [dc.EOS_ID] + padding[:-1]
 
@@ -76,6 +79,20 @@ def data_to_ids(data_path, target_path, vocab_path, is_normal):
     f_data.close()
     f_target.close()
 
+def split_to_test(data_path):
+    f_data = open(data_path, 'r+')
+    test_data = open(data_path + '_test', 'w+')
+    lines = f_data.readlines()
+    f_data.seek(0)
+    for i, line in enumerate(lines):
+        if i % dc.TEST_SPLIT == 0:
+            test_data.write(line)
+        else:
+            f_data.write(line)
+    f_data.truncate()
+    f_data.close()
+    test_data.close()
+
 def process_data():
     """
     Preps data for text simplifier
@@ -89,6 +106,9 @@ def process_data():
                 dc.NORMAL_VOCAB_PATH, True)
     data_to_ids(dc.SIMPLE_SENTENCE_PATH, dc.SIMPLE_IDS_PATH,
                 dc.SIMPLE_VOCAB_PATH, False)
+
+    split_to_test(dc.NORMAL_IDS_PATH)
+    split_to_test(dc.SIMPLE_IDS_PATH)
 
 if __name__ == '__main__':
     process_data()
