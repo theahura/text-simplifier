@@ -13,6 +13,7 @@ NORMAL_IDS_PATH = 'data/normal_ids.data'
 SIMPLE_IDS_PATH = 'data/simple_ids.data'
 NORMAL_IDS_TEST_PATH = 'data/normal_ids.data_test'
 SIMPLE_IDS_TEST_PATH = 'data/simple_ids.data_test'
+NORMAL_DOC_PATH = 'data/normal_doc.data'
 CKPT_PATH = 'data/ckpt/'
 
 # Data constants: IDs.
@@ -52,16 +53,17 @@ MAX_GRAD_NORM = 5.0 # Use clipping
 #       Hyperparams.
 LAYER_SETUP = [256, 256, 256]
 UNITS_PER_LAYER = LAYER_SETUP[len(LAYER_SETUP) - 1]
-REG_CONST = 0.001
+REG_CONST = 0.0000001
 
 #       What to run. If all are false, defaults to input testing.
 PIPE_TEST = False
-TRAIN = True
+TRAIN = False
 TEST = False
+DOC_TEST = True
 
 # Debug constants.
 DEBUG = False
 STEPS_PER_CHECKPOINT = 100
 CREATE_DATA = False
-LOG_FILE_NAME = '256-256-256-3-graddesc'
+LOG_FILE_NAME = '256-256-256-7-graddesc'
 TEST_BATCHES = 30

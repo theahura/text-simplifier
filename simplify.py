@@ -197,6 +197,75 @@ def test(log_file):
         avg_bleu = avg_bleu/dc.TEST_BATCHES
         print "Avg bleu: %f" % avg_bleu
 
+def pipe_sentence(sentence, normal_vocab, rev_simple_vocab, sess, model):
+    token_sentence = data_utils.sentence_to_ids(sentence, normal_vocab)
+
+    if dc.DEBUG:
+        print token_sentence
+
+    padded_sentence = data_utils.pad_data(token_sentence, True)
+
+    if dc.DEBUG:
+        print padded_sentence
+
+    decoder = [dc.GO_ID] + [dc.EMPT_ID]*(dc.MAX_LEN_OUT - 1)
+
+    input_token_sentence = [(padded_sentence, decoder)]
+    encoder_in, decoder_in, target_weights = model.get_batch(
+            input_token_sentence)
+
+    if dc.DEBUG:
+        print encoder_in
+        print decoder_in
+        print target_weights
+
+    _, loss, output_logits = model.step(sess, encoder_in, decoder_in,
+            target_weights, True)
+
+    if dc.DEBUG:
+        print "Loss: %f" % loss
+        print output_logits
+        print len(output_logits)
+        print len(output_logits[0])
+        print len(output_logits[0][0])
+        print output_logits[0]
+        print np.max(output_logits[0], axis=1)
+
+    outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
+
+    if dc.EOS_ID in outputs:
+        outputs = outputs[:outputs.index(dc.EOS_ID)]
+
+    if dc.DEBUG:
+        print len(outputs)
+        print outputs
+    
+    translation = " ".join([tf.compat.as_str(rev_simple_vocab[output])
+        for output in outputs])
+
+    if dc.DEBUG:
+        print(translation)
+    return translation
+
+def doc_test(log_file):
+    if os.path.isfile('./' + log_file + '_doc'):
+        raise ValueError('log file already exists')
+
+    with tf.Session() as sess, open(log_file + '_doc', 'w+') as log, open(
+            dc.NORMAL_DOC_PATH, 'r+') as doc_file, open(
+                    'temp_doc', 'w+') as temp:
+        doc_to_translate = doc_file.readline()
+        sentences = [sentence + '.' for sentence in doc_to_translate.split('.')]
+        model = create_model(sess, True)
+        model.batch_size = 1
+        normal_vocab, _ = data_utils.get_vocabulary(dc.NORMAL_VOCAB_PATH)
+        _, rev_simple_vocab = data_utils.get_vocabulary(dc.SIMPLE_VOCAB_PATH)
+        for sentence in sentences:
+            translation = pipe_sentence(sentence, normal_vocab,
+                    rev_simple_vocab, sess, model)
+            log.write(translation + '\n')
+            temp.write(sentence + '\n')
+
 def input_test():
     with tf.Session() as sess:
         model = create_model(sess, True)
@@ -210,45 +279,10 @@ def input_test():
         sentence = sys.stdin.readline()
 
         while sentence:
-            token_sentence = data_utils.sentence_to_ids(sentence, normal_vocab)
+            translation = pipe_sentence(sentence, normal_vocab,
+                    rev_simple_vocab, sess, model)
 
-            print token_sentence
-
-            padded_sentence = data_utils.pad_data(token_sentence, True)
-
-            print padded_sentence
-
-            decoder = [dc.GO_ID] + [dc.EMPT_ID]*(dc.MAX_LEN_OUT - 1)
-
-            input_token_sentence = [(padded_sentence, decoder)]
-            encoder_in, decoder_in, target_weights = model.get_batch(
-                    input_token_sentence)
-
-            print encoder_in
-            print decoder_in
-            print target_weights
-            _, loss, output_logits = model.step(sess, encoder_in, decoder_in,
-                    target_weights, True)
-
-            print "Loss: %f" % loss
-
-            print output_logits
-            print len(output_logits)
-            print len(output_logits[0])
-            print len(output_logits[0][0])
-            print output_logits[0]
-            print np.max(output_logits[0], axis=1)
-
-            outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
-
-            if dc.EOS_ID in outputs:
-                outputs = outputs[:outputs.index(dc.EOS_ID)]
-
-            print len(outputs)
-            print outputs
-
-            print(" ".join([tf.compat.as_str(rev_simple_vocab[output])
-                for output in outputs]))
+            print translation
 
             print "> "
             sys.stdout.flush()
@@ -301,5 +335,7 @@ if __name__ == "__main__":
             train(dc.CREATE_DATA, dc.LOG_FILE_NAME)
     elif dc.TEST:
         test(dc.LOG_FILE_NAME)
+    elif dc.DOC_TEST:
+        doc_test(dc.LOG_FILE_NAME)
     else:
         input_test()
