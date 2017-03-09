@@ -1,7 +1,4 @@
-"""
-Author: Amol Kapoor
-Description: Store all of the same article onto the same line
-"""
+"""Store all of the same article onto the same line."""
 
 import pandas
 

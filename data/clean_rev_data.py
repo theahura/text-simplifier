@@ -1,7 +1,4 @@
-"""
-Author: Amol Kapoor
-Condenses files for wiki-rev-split database into two files.
-"""
+"""Condenses files for wiki-rev-split database into two files."""
 
 import os
 

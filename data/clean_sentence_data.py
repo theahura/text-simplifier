@@ -1,7 +1,4 @@
-"""
-Author: Amol Kapoor
-Description: cleans sentence aligned data
-"""
+"""Cleans sentence aligned data."""
 
 def clean_file(f, fname):
     f.seek(0)
