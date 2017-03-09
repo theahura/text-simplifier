@@ -1,8 +1,4 @@
-"""
-Author: Amol Kapoor
-
-Description: Model for seq2seq text simplifier
-"""
+"""Model for seq2seq text simplifier. Influenced by tf seq2seq tutorial."""
 
 import numpy as np
 import random
@@ -24,7 +20,9 @@ class SimplifierModel():
                  num_samples=512,
                  feed_previous=False,
                  dtype=tf.float32):
-        """Inits the model"""
+        """Inits the model. Set feed_previous to true for training, as it
+        defines whether the predicted output word is fed into the model at
+        timestep t+1, or if the given translation is."""
 
         self.normal_vocab_size = normal_vocab_size
         self.simple_vocab_size = simple_vocab_size
@@ -38,6 +36,7 @@ class SimplifierModel():
         output_projection = None
         softmax_loss_function = None
 
+        # See Jean et. al. Implementation taken from tf tutorial.
         if (num_samples > 0 and num_samples < self.simple_vocab_size and 
                 dc.USE_SAMPLED_SOFTMAX):
             print "Using sampled softmax."
@@ -68,6 +67,7 @@ class SimplifierModel():
         else:
             print "Not using sampled softmax"
               
+        # Use base LSTM with dropout with multiple layers.
         def single_cell(units):
             cell = tf.contrib.rnn.LSTMCell(units)
             cell = tf.contrib.rnn.DropoutWrapper(cell, dc.INPUT_KEEP_PROB,
@@ -97,6 +97,8 @@ class SimplifierModel():
         if dc.DEBUG:
             print "Normal size %d Simple size %d" % (normal_vocab_size,
                     simple_vocab_size)
+
+        # Envoke attention model.
         self.out, state = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(
                     self.encoder_inputs[:dc.MAX_LEN_IN],
                     self.decoder_inputs[:dc.MAX_LEN_OUT],
@@ -129,6 +131,7 @@ class SimplifierModel():
             print "Loss len"
             print self.loss.get_shape()
 
+        # Need to map back from sampled subspace to vocab subspace.
         self.out_proj = None
         if output_projection is not None:
             if dc.DEBUG:
@@ -144,6 +147,7 @@ class SimplifierModel():
             print [param.name for param in params]
             print len(params)
 
+        # When trianing, clips norm if hyperparameter is set appropriately.
         if not feed_previous:
             if max_grad_norm:
                 print "Using clipping"
@@ -178,6 +182,7 @@ class SimplifierModel():
         if len(target_weights) != decoder_size:
             raise ValueError("Target sizes unequal")
 
+        # Construct inputs for the graph.
         input_feed = {}
 
         for i in xrange(encoder_size):
@@ -187,15 +192,18 @@ class SimplifierModel():
             input_feed[self.target_weights[i].name] = target_weights[i]
 
         last_target = self.decoder_inputs[decoder_size].name
+
+        # The target words are all offset by one. Need an ending that is set to
+        # all zeros as a result.
         input_feed[last_target] = np.zeros([self.batch_size], dtype=np.int32)
 
         if dc.DEBUG:
             print "INPUT FEED:"
             print input_feed
 
+        # Construct output actions for the graph to run.
         if not feed_previous:
             output_feed = [self.update,
-                           # self.grad_norm,
                            self.loss]    
             if dc.DEBUG:
                 output_feed.append(self.state)
@@ -207,6 +215,7 @@ class SimplifierModel():
                 else:
                     output_feed.append(self.out[i])
 
+        # Run step.
         outputs = session.run(output_feed, input_feed) 
 
         if dc.DEBUG and not feed_previous:
@@ -214,10 +223,12 @@ class SimplifierModel():
             print len(outputs[2])
             print outputs[2]
 
+        # Based on whether we are in training or testing mode, output different
+        # things.
         if feed_previous:
-            return None, outputs[0], outputs[1:]
+            return outputs[0], outputs[1:]
         else:
-            return None, outputs[1], None
+            return outputs[1], None
 
     def get_batch(self, data):
         """Gets the next batch from the data set"""
@@ -231,6 +242,10 @@ class SimplifierModel():
 
         batch_encoder_in, batch_decoder_in, batch_weights = [], [], []
 
+        # Input sentences need to be transposed from aligned horizontally to
+        # vertically, such that each word in a batch is aligned with all of the
+        # other words at a certain input position. Heavily influenced from tf
+        # tutorial.
         for sentence_location in xrange(encoder_size):
             batch_encoder_in.append(
                     np.array([encoder_inputs[batch_id][sentence_location]

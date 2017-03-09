@@ -1,4 +1,7 @@
-""" Where training and simplification actually happen """
+""" 
+Where training and simplification actually happen. Influenced by tf seq2seq
+tutorial.
+"""
 
 import nltk
 import numpy as np
@@ -13,7 +16,16 @@ import data_utils
 import model as sm
 
 def read_data(normal_path, simple_path, is_test=False):
-    """Reads data from files and returns as list of tuples"""
+    """Reads data from files and returns as list of tuples 
+
+    Args:
+        normal_path: str, the path to ids for normal wikipedia data
+        simple_path: str, same as normal path but simplewiki
+        is_test: whether to return train/valid split, or just test data
+
+    Return: 
+        [(normal data : simple data)]
+    """
     normal_f = open(normal_path, 'r+')
     simple_f = open(simple_path, 'r+')
 
@@ -39,7 +51,16 @@ def read_data(normal_path, simple_path, is_test=False):
     return train_set, valid_set
 
 def create_model(session, feed_previous):
-    """Create translation model"""
+    """Create translation model. Loads checkpoints if available.
+    
+    Args:
+        session: tf sess to use for the model
+        feed_previous: whether or not the model should construct a graph where
+            previous inputs are fed in by hand instead of predicted
+
+    Return:
+        tf simplifier model
+    """
     
     normal_vocab_size, simple_vocab_size = 0, 0
 
@@ -71,7 +92,12 @@ def create_model(session, feed_previous):
     return model
 
 def train(create_data, log_file):
-    """Trains a english to simple english translation model"""
+    """Trains a english to simple english translation model.
+    
+    Args:
+        create_data: whether to load data from databases or not on startup.
+        log_file: where to store training data outputs.
+    """
 
     if os.path.isfile('./' + log_file):
         raise ValueError('log file already exists')
@@ -95,10 +121,12 @@ def train(create_data, log_file):
         step_time, loss = 0.0, 0.0
         current_step = 0
         prev_losses = []
+
+        # Training loop
         while current_step < dc.NUM_STEPS or dc.IGNORE_STEPS:
             start_time = time.time()
             encoder_in, decoder_in, target_weights = model.get_batch(train)
-            _, step_loss, _ = model.step(sess, encoder_in, decoder_in,
+            step_loss, _ = model.step(sess, encoder_in, decoder_in,
                                          target_weights, False)
             step_time += (time.time() - start_time)/dc.STEPS_PER_CHECKPOINT
 
@@ -110,6 +138,7 @@ def train(create_data, log_file):
                 print "Loss: %f" % step_loss
                 print "Learning: %f" % model.learning_rate.eval()
 
+            # Every some amount of steps, output stats and check validation loss
             if current_step % dc.STEPS_PER_CHECKPOINT == 0:
                 learnrate = model.learning_rate.eval()
                 perplex = math.exp(float(loss)) if loss < 300 else float("inf")
@@ -126,7 +155,7 @@ def train(create_data, log_file):
                         global_step=model.global_step)
 
                 encoder_in, decoder_in, target_weights = model.get_batch(valid)
-                _, val_loss, outputs = model.step(sess, encoder_in, decoder_in,
+                val_loss, outputs = model.step(sess, encoder_in, decoder_in,
                                                   target_weights, True)
 
                 if dc.DEBUG:
@@ -138,7 +167,10 @@ def train(create_data, log_file):
                     print len(outputs[0][0])
                 outputs = [int(np.argmax(logit, axis=1)[0])
                         for logit in outputs]
-                print outputs
+                
+                if dc.DEBUG:
+                    print outputs
+
                 print "validation loss: %f" % val_loss
 
                 fields = [step, step_time, loss, perplex, learnrate, val_loss]
@@ -148,7 +180,12 @@ def train(create_data, log_file):
             sys.stdout.flush()
 
 def test(log_file):
-    """Get BLEU metrics for test data."""
+    """Get BLEU metrics for test data.
+    
+    Args:
+        log_file: where to store BLEU data.
+    """
+
     if os.path.isfile('./' + log_file + '_test'):
         raise ValueError('log file already exists')
 
@@ -163,7 +200,7 @@ def test(log_file):
         avg_bleu = 0
         for batch in xrange(dc.TEST_BATCHES):
             encoder_in, decoder_in, target_weights = model.get_batch(test)
-            _, _, output_logits = model.step(sess, encoder_in, decoder_in,
+            _, output_logits = model.step(sess, encoder_in, decoder_in,
                                              target_weights, True)
 
             if dc.DEBUG:
@@ -198,6 +235,18 @@ def test(log_file):
         print "Avg bleu: %f" % avg_bleu
 
 def pipe_sentence(sentence, normal_vocab, rev_simple_vocab, sess, model):
+    """Helper method to pipe a single sentence into the model.
+
+    Args:
+        sentence: str, unformatted sentence
+        normal_vocab: {word : id}, vocab for inputs
+        rev_simple_vocab: [] with words matching index for id, vocab for outputs
+        sess: tf session
+        model: tf model for simplification
+
+    Return:
+       str, predicted simplified sentence 
+    """
     token_sentence = data_utils.sentence_to_ids(sentence, normal_vocab)
 
     if dc.DEBUG:
@@ -208,6 +257,7 @@ def pipe_sentence(sentence, normal_vocab, rev_simple_vocab, sess, model):
     if dc.DEBUG:
         print padded_sentence
 
+    # Decoder input doesnt matter because the predicted value is fed in.
     decoder = [dc.GO_ID] + [dc.EMPT_ID]*(dc.MAX_LEN_OUT - 1)
 
     input_token_sentence = [(padded_sentence, decoder)]
@@ -219,7 +269,7 @@ def pipe_sentence(sentence, normal_vocab, rev_simple_vocab, sess, model):
         print decoder_in
         print target_weights
 
-    _, loss, output_logits = model.step(sess, encoder_in, decoder_in,
+    loss, output_logits = model.step(sess, encoder_in, decoder_in,
             target_weights, True)
 
     if dc.DEBUG:
@@ -248,9 +298,17 @@ def pipe_sentence(sentence, normal_vocab, rev_simple_vocab, sess, model):
     return translation
 
 def doc_test(log_file):
+    """Test the model qualitatively on a document.
+    
+    Args:
+        log_file: where to store the output document.
+    """
     if os.path.isfile('./' + log_file + '_doc'):
         raise ValueError('log file already exists')
 
+    # The temp file created here splits the input document into line by line
+    # representations to make it easier to see how translations were done on a
+    # sentence level.
     with tf.Session() as sess, open(log_file + '_doc', 'w+') as log, open(
             dc.NORMAL_DOC_PATH, 'r+') as doc_file, open(
                     'temp_doc', 'w+') as temp:
@@ -267,6 +325,7 @@ def doc_test(log_file):
             temp.write(sentence + '\n')
 
 def input_test():
+    """Input your own sentence and see how the model interprets it."""
     with tf.Session() as sess:
         model = create_model(sess, True)
         model.batch_size = 1
@@ -289,7 +348,8 @@ def input_test():
             sentence = sys.stdin.readline()
 
 def pipe_test():
-  """Test the model."""
+  """Test the model pipeline. Used for debugging."""
+
   with tf.Session() as sess:
     print("Pipeline test for neural translation model")
     # Create model with vocabularies of 10, 2 layers of 32, batch size 32.
@@ -302,14 +362,14 @@ def pipe_test():
     for _ in xrange(500):  # Train the fake model for 50 steps.
       encoder_inputs, decoder_inputs, target_weights = model.get_batch(
           data_set)
-      _, step_loss, _ = model.step(sess, encoder_inputs, decoder_inputs,
+      step_loss, _ = model.step(sess, encoder_inputs, decoder_inputs,
               target_weights, False)
       print "Loss %f" % step_loss
       
     model.batch_size = 1
     input_token = [([1, 7], [0, 0])]
     encode, decode, weights = model.get_batch(input_token)
-    _, _, output_logits = model.step(sess, encode, decode, weights, True)
+    _, output_logits = model.step(sess, encode, decode, weights, True)
     print output_logits
     print len(output_logits)
     print len(output_logits[0])
@@ -321,7 +381,7 @@ def pipe_test():
 
     input_token = [([9, 5], [0, 0])]
     encode, decoder, weights = model.get_batch(input_token)
-    _, _, output_logits = model.step(sess, encode, decode, weights, True)
+    _, output_logits = model.step(sess, encode, decode, weights, True)
     outputs = [int(np.argmax(logit, axis=1)[0]) for logit in output_logits]
     print len(outputs)
     print outputs

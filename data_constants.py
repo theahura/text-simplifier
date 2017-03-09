@@ -1,8 +1,4 @@
-"""
-Author: Amol Kapoor
-
-Description: Constants for text simplifier network.
-"""
+"""Constants for text simplifier network."""
 
 # Paths.
 NORMAL_SENTENCE_PATH = 'data/normal_sentences.data'
@@ -62,8 +58,8 @@ TEST = False
 DOC_TEST = True
 
 # Debug constants.
-DEBUG = False
+DEBUG = False # Used to output important data through the model and simplifier
 STEPS_PER_CHECKPOINT = 100
 CREATE_DATA = False
 LOG_FILE_NAME = '256-256-256-7-graddesc'
-TEST_BATCHES = 30
+TEST_BATCHES = 100

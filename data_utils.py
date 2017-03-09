@@ -6,8 +6,12 @@ import tensorflow as tf
 
 
 def create_vocabulary(vocab_path, data_path, max_size):
-    """
-    Writes a vocab path to a file
+    """Writes a vocab path to a file.
+
+    Args:
+        vocab_path: path to store the vocabulary.
+        data_path: path of corpus to pull vocab from.
+        max_size: where to limit the vocab input.
     """
     vocab = {}
     f = open(data_path, 'r+')
@@ -30,9 +34,7 @@ def create_vocabulary(vocab_path, data_path, max_size):
     f.close()
 
 def get_vocabulary(vocab_path):
-    """
-    Returns a vocab map based on the input path
-    """
+    """Returns a vocab map based on the input path."""
     f = open(vocab_path, 'r+')
     rev_vocab = [tf.compat.as_bytes(line.strip()) for line in f.readlines()]
     vocab = dict([(x, y) for (y, x) in enumerate(rev_vocab)])
@@ -63,8 +65,13 @@ def pad_data(token_sentence, is_normal):
 
 
 def data_to_ids(data_path, target_path, vocab_path, is_normal):
-    """
-    Stores a tokenized version of input data
+    """Stores a tokenized version of input data.
+
+    Args:
+        data_path: where to get sentence data.
+        target_path: where to store ids.
+        vocab_path: where to get vocabulary for sentence to id conversion.
+        is_normal: determines how to pad a sentence.
     """
     f_data = open(data_path, 'r+')
     f_target = open(target_path, 'w+')
@@ -80,6 +87,7 @@ def data_to_ids(data_path, target_path, vocab_path, is_normal):
     f_target.close()
 
 def split_to_test(data_path):
+    """Removes a set of sentences from the dataset for testing."""
     f_data = open(data_path, 'r+')
     test_data = open(data_path + '_test', 'w+')
     lines = f_data.readlines()
@@ -94,9 +102,7 @@ def split_to_test(data_path):
     test_data.close()
 
 def process_data():
-    """
-    Preps data for text simplifier
-    """
+    """Preps data for text simplifier. Converts sentence data to ids."""
     create_vocabulary(dc.NORMAL_VOCAB_PATH, dc.NORMAL_SENTENCE_PATH,
                       dc.MAX_VOCAB_SIZE)
     create_vocabulary(dc.SIMPLE_VOCAB_PATH, dc.SIMPLE_SENTENCE_PATH,
