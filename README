@@ -1,0 +1,62 @@
+Author:     Amol Kapoor
+Course:     DL4NLP
+Instructor: Bernardo Orozco
+
+
+Description:
+
+Implementation of deep learning NLP task using modern machine learning tools.
+Specifically, developed tensorflow 1.0 model for text simplification. Model
+uses Wikipedia to SimpleWikipedia data sets, cited below. These data sets were
+cleaned up (see clean_*.py files) so that each alignment was on a single line in
+two documents, such that line 1 in the 'normal' document aligned with a
+simplification on line 2 in the 'simple' document. This was done for sentences,
+revisions, and documents, although in the end only sentences were used for
+training. These files were then further processed by data_utils.py to create
+vocabularies for normal wikipedia and simple wikipedia, and then convert
+sentence data to ids. 
+
+Data that are fed into the model is converted into batch major vectors in
+get_batch in model.py, and are then passed into the model defined by the
+embedding_attention_seq2seq call. Regularization was done with dropout on LSTM
+units and L2 norm clipping on LSTM weights.
+
+Different architectures were tested by modifying parameters in
+data_constants.py. Plots for hyperparameters can be found under
+data/hyperplots, including the data that produced those plots. Measures of
+perplexity and loss were used to determine which hyperparameter setup was
+ideal. Here, cross validation was done with completely separated validation
+and test sets. Multiple different splits for cross validation would be
+preferable for added rigor/reduced variance, but there was not enough time.
+
+After optimizing hyperparameters, architectures were tested for BLEU scores
+with a previously unseen dataset (see the test() funciton in simplify.py).
+These scores can also be found in data/hyperplots.
+
+To run this model: 
+        Pipeline test: this is a basic test with dummy data to make sure all
+        variables work appropriately and the graph is constructed correctly. in
+        data_constants.py, set all variables under 'what to run' as False and
+        PIPE_TEST as true. Run simplify.py.
+
+        Training mode: in data_constants.py, set all variables under 'what to
+        run' as False and TRAIN as true. Run simplify.py.
+
+        Testing mode (BLEU): in data_constants.py, set all variables under 'what
+        to run' as False and TEST as true. Run simplify.py.
+
+        Testing mode (document): Run qualitative translation on a wikipedia
+        doc. In data_constants.py, set all variables under 'what to run' as
+        False and DOC_TEST as true. Run simplify.py. Outputs are given in log
+        file LOG_FILE_NAME listed in data_constants.py
+
+        Input mode: test an input sentence of your own. Set all variables
+        under 'what to run' as False. Run simplify.py.
+
+Citations: 
+
+(dataset) http://homepages.inf.ed.ac.uk/kwoodsen/wiki.html 
+(dataset) http://www.cs.pomona.edu/~dkauchak/simplification/
+https://www.tensorflow.org/tutorials/seq2seq
+https://github.com/tensorflow/models/blob/master/tutorials/rnn/translate/translate.py
+https://github.com/tensorflow/models/blob/master/tutorials/rnn/translate/seq2seq_model.py

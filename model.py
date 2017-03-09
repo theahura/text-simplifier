@@ -118,6 +118,7 @@ class SimplifierModel():
             print "Target len %d" % len(targets)
             print "Target weights len %d" % len(self.target_weights)
 
+        # L2 regularization done on LSTM cell weights.
         l2 = dc.REG_CONST * sum(tf.nn.l2_loss(x) for x in
                 tf.trainable_variables() if ('lstm_cell' in x.name and not
                     'biases' in x.name))

@@ -62,4 +62,4 @@ DEBUG = False # Used to output important data through the model and simplifier
 STEPS_PER_CHECKPOINT = 100
 CREATE_DATA = False
 LOG_FILE_NAME = '256-256-256-7-graddesc'
-TEST_BATCHES = 100
+TEST_BATCHES = 30
