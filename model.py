@@ -66,7 +66,7 @@ class SimplifierModel():
             softmax_loss_function = sampled_loss
         else:
             print "Not using sampled softmax"
-              
+
         # Use base LSTM with dropout with multiple layers.
         def single_cell(units):
             cell = tf.contrib.rnn.LSTMCell(units)
